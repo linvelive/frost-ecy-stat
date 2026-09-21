@@ -1,0 +1,10 @@
+build*/
+**/build*/
+**/sdkconfig
+**/sdkconfig.old
+*.bin
+*.elf
+*.map
+*.local.hpp
+.env*
+.DS_Store

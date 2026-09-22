@@ -89,6 +89,12 @@ wire encoding. Arbitrary thermostat limits and Celsius-configured installations
 have not been characterized; a finite encoded value is not proof the thermostat
 will accept it.
 
+## Development context
+
+Read [CONTEXT.md](CONTEXT.md) for domain terms,
+[AGENTS.md](AGENTS.md) for source routing and the shared skill deployment,
+and [the issue tracker](docs/agents/issue-tracker.md) for work conventions.
+
 ## Tests without hardware
 
 ```sh

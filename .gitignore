@@ -8,3 +8,7 @@ build*/
 *.local.hpp
 .env*
 .DS_Store
+
+# Local skill snapshots and their Claude entrypoint
+/.agents/skills/
+/.claude/skills

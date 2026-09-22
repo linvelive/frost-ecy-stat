@@ -91,8 +91,7 @@ will accept it.
 
 ## Development context
 
-Read [CONTEXT.md](CONTEXT.md) for domain terms,
-[AGENTS.md](AGENTS.md) for source routing and the shared skill deployment,
+Read [CONTEXT.md](CONTEXT.md) for domain terms
 and [the issue tracker](docs/agents/issue-tracker.md) for work conventions.
 
 ## Tests without hardware

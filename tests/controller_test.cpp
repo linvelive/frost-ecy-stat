@@ -184,6 +184,125 @@ void test_codec_vectors() {
   assert(mode == FanMode::Auto);
 }
 
+std::array<std::uint8_t, 18> target_readback_bits(std::uint32_t bits) {
+  std::array<std::uint8_t, 18> value{};
+  for (std::size_t i = 0; i < 4; ++i) {
+    value[14 + i] = static_cast<std::uint8_t>(bits >> (8 * i));
+  }
+  return value;
+}
+
+void test_controller_requires_exact_target() {
+  const auto exact = target_readback_bits(0x42880000U);  // 68.0F
+  // Adjacent floats below/above 68F differ by less than the old 0.001F tolerance.
+  for (const auto bits : {0x4287ffffU, 0x42880001U}) {
+    const auto near = target_readback_bits(bits);
+    {
+      RecordingTransport transport;
+      transport.target_value = near;
+      frost::EcyStatController controller(transport);
+      const auto result = controller.verify_current(frost::kMorningState);
+      assert(result.status == ApplyStatus::Failed);
+      assert(result.target.status == FieldApplyStatus::Mismatch);
+      assert(transport.writes.empty());
+    }
+    {
+      RecordingTransport transport;
+      transport.target_readbacks = {near, exact, exact};
+      frost::EcyStatController controller(transport);
+      const auto result = controller.ensure_applied(frost::kMorningState);
+      assert(result.status == ApplyStatus::Verified);
+      assert(transport.writes.size() == 2);
+    }
+    {
+      RecordingTransport transport;
+      transport.target_value = near;
+      frost::EcyStatController controller(transport);
+      const auto result = controller.apply(frost::kMorningState);
+      assert(result.status == ApplyStatus::Failed);
+      assert(result.target.status == FieldApplyStatus::Mismatch);
+      assert(result.fan.status == FieldApplyStatus::NotAttempted);
+      assert(transport.writes.size() == 1);
+    }
+    {
+      RecordingTransport transport;
+      transport.target_readbacks = {exact, near};
+      frost::EcyStatController controller(transport);
+      const auto result = controller.apply(frost::kMorningState);
+      assert(result.status == ApplyStatus::PartialFailure);
+      assert(result.target.status == FieldApplyStatus::Mismatch);
+      assert(result.fan.status == FieldApplyStatus::Verified);
+      assert(transport.writes.size() == 2);
+    }
+  }
+
+  RecordingTransport transport;
+  transport.target_value = target_readback_bits(0x42890000U);  // 68.5F
+  frost::EcyStatController controller(transport);
+  auto desired = frost::kMorningState;
+  desired.target_temperature_f = 68.5f;
+  assert(controller.ensure_applied(desired).status == ApplyStatus::Verified);
+  assert(transport.writes.empty());
+  assert(controller.apply(desired).status == ApplyStatus::Verified);
+  assert(transport.writes.size() == 2);
+}
+
+void test_nonfinite_target_readbacks_fail_closed() {
+  // Quiet NaN, positive infinity, negative infinity in IEEE-754 binary32.
+  for (const auto bits : {0x7fc00000U, 0x7f800000U, 0xff800000U}) {
+    const auto invalid = target_readback_bits(bits);
+    float decoded = 0.0f;
+    assert(frost::decode_target_temperature_readback(
+               invalid.data(), invalid.size(), decoded) ==
+           frost::CodecError::InvalidTemperature);
+    {
+      RecordingTransport transport;
+      transport.target_value = invalid;
+      frost::EcyStatController controller(transport);
+      const auto result = controller.ensure_applied(frost::kMorningState);
+      assert(result.status == ApplyStatus::Failed);
+      assert(result.target.status == FieldApplyStatus::ReadbackMalformed);
+      assert(transport.writes.empty());
+    }
+    {
+      RecordingTransport transport;
+      transport.target_value = invalid;
+      frost::EcyStatController controller(transport);
+      const auto result = controller.apply(frost::kMorningState);
+      assert(result.status == ApplyStatus::Failed);
+      assert(result.target.status == FieldApplyStatus::ReadbackMalformed);
+      assert(result.fan.status == FieldApplyStatus::NotAttempted);
+      assert(transport.writes.size() == 1);
+    }
+    {
+      RecordingTransport transport;
+      transport.target_readbacks = {transport.target_value, invalid};
+      frost::EcyStatController controller(transport);
+      const auto result = controller.apply(frost::kMorningState);
+      assert(result.status == ApplyStatus::PartialFailure);
+      assert(result.target.status == FieldApplyStatus::ReadbackMalformed);
+      assert(result.fan.status == FieldApplyStatus::Verified);
+      assert(transport.writes.size() == 2);
+    }
+  }
+}
+
+void test_nonfinite_target_commands_do_not_connect() {
+  for (const auto value : {std::numeric_limits<float>::quiet_NaN(),
+                           std::numeric_limits<float>::infinity(),
+                           -std::numeric_limits<float>::infinity()}) {
+    RecordingTransport transport;
+    frost::EcyStatController controller(transport);
+    auto desired = frost::kMorningState;
+    desired.target_temperature_f = value;
+    assert(controller.verify_current(desired).status == ApplyStatus::InvalidCommand);
+    assert(controller.ensure_applied(desired).status == ApplyStatus::InvalidCommand);
+    assert(controller.apply(desired).status == ApplyStatus::InvalidCommand);
+    assert(transport.operations.empty());
+  }
+}
+
+
 void test_controller_ensure_skips_write_when_state_matches() {
   RecordingTransport transport;
   frost::EcyStatController controller(transport);
@@ -398,6 +517,9 @@ void test_invalid_values_never_verify() {
 }
 
 int main() {
+  test_controller_requires_exact_target();
+  test_nonfinite_target_readbacks_fail_closed();
+  test_nonfinite_target_commands_do_not_connect();
   test_invalid_values_never_verify();
   test_codec_vectors();
   test_controller_ensure_skips_write_when_state_matches();

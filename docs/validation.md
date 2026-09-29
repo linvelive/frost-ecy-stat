@@ -16,6 +16,18 @@ of this newly extracted public library.
 
 ## Operational contract
 
+Target verification uses exact numeric equality of the requested and decoded
+Fahrenheit float, with no tolerance. This applies before writing, after the
+Target write, and after Fan convergence. Non-finite requested temperatures are
+invalid commands; non-finite readbacks are malformed and never authorize writes.
+The codec preserves the float without unit conversion or rounding. Device
+rounding for arbitrary setpoints remains uncharacterized.
+
+September 23, 2026: host regression cases cover the adjacent floats on both
+sides of 68F at all three comparisons, exact 68.5F success, and NaN/infinities
+at each readback stage and as requested values. This source change has not
+been flashed or hardware-tested.
+
 The controller reads before applying. A matching Target/Fan state produces no
 writes. Failed reads do not justify a blind write. On mismatch, it writes Target,
 verifies Target, writes Fan, polls Fan, and rereads Target. There is no rollback:

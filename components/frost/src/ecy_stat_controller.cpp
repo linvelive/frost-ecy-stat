@@ -6,7 +6,6 @@
 namespace frost {
 namespace {
 
-constexpr float kTemperatureReadbackToleranceF = 0.001f;
 constexpr std::size_t kReadBufferCapacity = 32;
 constexpr std::array<std::uint32_t, 3> kFanReadbackPollDelaysMs = {
     0,
@@ -76,10 +75,8 @@ ApplyResult EcyStatController::verify_current(
   }
 
   final_result.target.status = FieldApplyStatus::Verified;
-  if (std::fabs(
-          final_result.target.readback_temperature_f -
-          desired_state.target_temperature_f) >
-      kTemperatureReadbackToleranceF) {
+  if (final_result.target.readback_temperature_f !=
+      desired_state.target_temperature_f) {
     final_result.target.status = FieldApplyStatus::Mismatch;
   }
 
@@ -192,10 +189,8 @@ ApplyResult EcyStatController::apply(const DesiredState& desired_state) {
     return finish(final_result);
   }
 
-  if (std::fabs(
-          final_result.target.readback_temperature_f -
-          desired_state.target_temperature_f) >
-      kTemperatureReadbackToleranceF) {
+  if (final_result.target.readback_temperature_f !=
+      desired_state.target_temperature_f) {
     final_result.status = ApplyStatus::Failed;
     final_result.target.status = FieldApplyStatus::Mismatch;
     return finish(final_result);
@@ -278,10 +273,8 @@ ApplyResult EcyStatController::apply(const DesiredState& desired_state) {
     return finish(final_result);
   }
 
-  if (std::fabs(
-          final_result.target.readback_temperature_f -
-          desired_state.target_temperature_f) >
-      kTemperatureReadbackToleranceF) {
+  if (final_result.target.readback_temperature_f !=
+      desired_state.target_temperature_f) {
     final_result.status = ApplyStatus::PartialFailure;
     final_result.target.status = FieldApplyStatus::Mismatch;
     return finish(final_result);
